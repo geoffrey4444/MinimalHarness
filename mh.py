@@ -5,52 +5,58 @@ from openai import OpenAI
 def multiply(a: int, b: int) -> int:
     """Multiply two integers"""
     result = a * b
-    print(f"\n[TOOL] multiply({a}, {b}) = {result}")
     return result
 
 
-expected_argument_types = {"int": int}
+expected_argument_types = {"integer": int, "string": str, "boolean": bool}
 
 
 def validate_tool_call(tool_call):
     """Check if a tool call is valid."""
     # Currently only support function tool calls
     if tool_call.type != "function":
-        return False
+        return False, None
     available_names = [
         available_tools[tool]["schema"]["function"]["name"] for tool in available_tools
     ]
     if tool_call.function.name not in available_names:
-        return False
+        return False, None
     schema = available_tools[tool_call.function.name]["schema"]
-    args = json.loads(tool_call.function.arguments)
+
+    try:
+      args = json.loads(tool_call.function.arguments)
+    except json.JSONDecodeError:
+        print(f"Error: tool arguments not valid json")
+        return False, None
+    if not isinstance(args, dict):
+        print(f"Error: tool call function arguments are not a dict")
+        return False, None
+
     expected_params = schema["function"]["parameters"]["properties"]
     required_params = schema["function"]["parameters"]["required"]
-    if len(args) > len(expected_params):
-        print(
-            f"Error: tool {tool_call.function.name} accepts {len(expected_params)} parameters but received {len(args)}"
-        )
-        return False
     if len(required_params) > len(args):
         print(
             f"Error: tool {tool_call.function.name} requires {len(required_params)} parameters but received {len(args)}"
         )
-        return False
+        return False, None
     for req in required_params:
         if req not in args:
             print(f"Error: required argument {req} not in {args}")
-            return False
+            return False, None
+        if args[req] == None:
+            print(f"Error: required argument {req} should not be None")
+            return False, None
     for arg in args:
         if arg not in expected_params:
             print(f"Error: argument {arg} not in expected parameters {expected_params}")
-            return False
+            return False, None
         if type(args[arg]) != expected_argument_types[expected_params[arg]["type"]]:
             print(
                 f"Error: argument {arg} type is {type(args[arg])} but should be {expected_argument_types[expected_params[arg]['type']]}"
             )
-            return False
+            return False, None
 
-    return True
+    return True, args
 
 
 multiply_schema = {
@@ -61,8 +67,8 @@ multiply_schema = {
         "parameters": {
             "type": "object",
             "properties": {
-                "a": {"type": "int", "description": "The first factor"},
-                "b": {"type": "int", "description": "The second factor"},
+                "a": {"type": "integer", "description": "The first factor"},
+                "b": {"type": "integer", "description": "The second factor"},
             },
             "required": ["a", "b"],
         },
@@ -84,27 +90,19 @@ response = client.chat.completions.create(
     messages=messages,
     tools=[available_tools[tool]["schema"] for tool in available_tools],
 )
-messages.append({"role": "assistant", "content": str(response)})
 
 message = response.choices[0].message
+messages.append(message.model_dump(exclude_none=True))
+
 tool_call = message.tool_calls[0]
-if not validate_tool_call(tool_call):
+valid, args = validate_tool_call(tool_call)
+if not valid:
     print(f"Error: invalid tool call {tool_call}")
     exit()
-
 func_to_call = available_tools[tool_call.function.name]["function"]
-print(type(tool_call.function.arguments), flush=True)
-print(tool_call.function.arguments, flush=True)
-args = json.loads(tool_call.function.arguments)
-print(args, flush=True)
+
 result = func_to_call(**args)
 
-messages.append(
-    {
-        "role": "assistant",
-        "content": f"Tool {tool_call.function.name} called with arguments {args}",
-    }
-)
 messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": f"{result}"})
 
 response = client.chat.completions.create(
