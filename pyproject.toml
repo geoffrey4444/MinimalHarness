@@ -10,6 +10,7 @@ dependencies = [
     "lmstudio>=1.5.0",
     "matplotlib>=3.11.2",
     "numpy>=2.5.4",
+    "openai>=3.35.1",
 ]
 
 [dependency-groups]

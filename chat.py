@@ -5,18 +5,25 @@ model = lms.llm(
 )
 chat = lms.Chat("You are a helpful assistant.")
 
+
+def multiply(a: int, b: int) -> int:
+    """Multiply two integers"""
+    result = a * b
+    print(f"\n[TOOL] multiply({a}, {b}) = {result}")
+    return result
+
+
+def print_fragment(fragment, round_index):
+    print(fragment.content, end="", flush=True)
+
+
 while True:
-    prompt = input("> ")
-    if prompt.lower() in ("quit", "exit"):
+    prompt = input("\n> ")
+    if prompt.lower() in ("quit", "exit", ""):
         break
 
     chat.add_user_message(prompt)
 
-    response = ""
-    for fragment in model.respond_stream(chat):
-        print(fragment.content, end="", flush=True)
-        response += fragment.content
-
-    chat.add_assistant_response(response)
-
-    print(response)
+    model.act(
+        chat, [multiply], on_message=chat.append, on_prediction_fragment=print_fragment
+    )
