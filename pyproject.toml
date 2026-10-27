@@ -17,3 +17,11 @@ dependencies = [
 dev = [
     "pytest>=9.1.1",
 ]
+
+[tool.uv]
+# Security floors for transitive dependencies: emSign trust and image decoders.
+constraint-dependencies = [
+    "certifi>=2026.10.19",
+    "pillow>=13.0.0",
+]
+
